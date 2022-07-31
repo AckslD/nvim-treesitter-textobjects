@@ -17,33 +17,56 @@ function M.select_textobject(query_string, keymap_mode)
   if textobject then
     if include_surrounding_whitespace then
       textobject = M.include_surrounding_whitespace(bufnr, textobject)
+      return
     end
     ts_utils.update_selection(bufnr, textobject, M.detect_selection_mode(query_string, keymap_mode))
   end
 end
 
 function M.include_surrounding_whitespace(bufnr, textobject)
+  P(textobject)
+  local start_row, start_col, end_row, end_col = ts_utils.get_vim_range(textobject, bufnr)
+  -- local start_row, start_col, end_row, end_col = unpack(textobject)
+  vim.api.nvim_win_set_cursor(0, {end_row, end_col})
+  local line = vim.fn.search([[\S]])
+end
+
+function M.include_surrounding_whitespace_(bufnr, textobject)
   local start_row, start_col, end_row, end_col = unpack(textobject)
   local extended = false
-  local next_row, next_col = M.next_position(bufnr, start_row, start_col, false)
-  while M.is_whitespace_after(bufnr, next_row, next_col) do
+  while M.can_expand(bufnr, end_row, end_col) do
     extended = true
-    start_row = next_row
-    start_col = next_col
-    next_row, next_col = M.next_position(bufnr, start_row, start_col, false)
+    end_row, end_col = M.next_position(bufnr, end_row, end_col, true)
   end
   if extended then
     -- don't extend in both directions
     return { start_row, start_col, end_row, end_col }
   end
-  while M.is_whitespace_after(bufnr, end_row, end_col) do
-    end_row, end_col = M.next_position(bufnr, end_row, end_col, true)
+  local next_row, next_col = M.next_position(bufnr, start_row, start_col, false)
+  while M.can_expand(bufnr, next_row, next_col) do
+    start_row = next_row
+    start_col = next_col
+    next_row, next_col = M.next_position(bufnr, start_row, start_col, false)
   end
   return { start_row, start_col, end_row, end_col }
 end
 
+function M.can_expand(bufnr, row, col)
+  -- return #M.get_line(bufnr, row) == 0 or M.is_whitespace_after(bufnr, row, col)
+  return M.is_whitespace_after(bufnr, row, col)
+end
+
 function M.is_whitespace_after(bufnr, row, col)
+  P(bufnr, row, col)
+  if col == #M.get_line(bufnr, row) then
+    if row == vim.api.nvim_buf_line_count(bufnr) then
+      return false
+    end
+    row = row + 1
+    col = 0
+  end
   local char = M.get_char_after_position(bufnr, row, col)
+  P(char)
   if char == nil then
     return false
   end
@@ -57,6 +80,7 @@ function M.get_char_after_position(bufnr, row, col)
   if row == nil then
     return nil
   end
+  P(row, col)
   return vim.api.nvim_buf_get_text(bufnr, row, col, row, col + 1, {})[1]
 end
 
