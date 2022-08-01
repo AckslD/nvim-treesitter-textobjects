@@ -16,7 +16,9 @@ function M.select_textobject(query_string, keymap_mode)
     shared.textobject_at_point(query_string, nil, nil, { lookahead = lookahead, lookbehind = lookbehind })
   if textobject then
     if include_surrounding_whitespace then
+      P(textobject)
       textobject = M.include_surrounding_whitespace(bufnr, textobject)
+      P(textobject)
       return
     end
     ts_utils.update_selection(bufnr, textobject, M.detect_selection_mode(query_string, keymap_mode))
@@ -24,11 +26,44 @@ function M.select_textobject(query_string, keymap_mode)
 end
 
 function M.include_surrounding_whitespace(bufnr, textobject)
-  P(textobject)
-  local start_row, start_col, end_row, end_col = ts_utils.get_vim_range(textobject, bufnr)
-  -- local start_row, start_col, end_row, end_col = unpack(textobject)
-  vim.api.nvim_win_set_cursor(0, {end_row, end_col})
-  local line = vim.fn.search([[\S]])
+  -- local start_row, start_col, end_row, end_col = ts_utils.get_vim_range(textobject, bufnr)
+  local start_row, start_col, end_row, end_col = unpack(textobject)
+  M.set_cursor(end_row, end_col)
+  -- vim.api.nvim_win_set_cursor(0, {end_row + 1, end_col})
+  -- vim.fn.setpos(".", { bufnr, end_row, end_col, 0 })
+  -- search to the next non-whitespace and then one character back
+  vim.fn.search([[\S]])
+  vim.fn.search([[.\|\n]], 'b')
+  end_row, end_col = M.get_cursor()
+
+  -- don't extend in both directions
+  -- if not (end_row == textobject[3] and end_col == textobject[4]) then
+  --   return {start_row, start_col, end_row, end_col + 1}
+  -- end
+  -- end_row, end_col = unpack(vim.api.nvim_win_get_cursor(0))
+
+  M.set_cursor(start_row, start_col)
+  -- vim.api.nvim_win_set_cursor(0, {start_row + 1, start_col})
+  -- vim.fn.setpos(".", { bufnr, start_row, start_col, 0 })
+  -- -- search to the next non-whitespace and then one character back
+  vim.fn.search([[\S]], 'b')
+  vim.fn.search([[.\|\n]])
+  start_row, start_col = M.get_cursor()
+  if start_col == 0 then
+    start_row = start_row - 1
+    start_col = #M.get_line(bufnr, start_row)
+  end
+  -- start_row, start_col = unpack(vim.api.nvim_win_get_cursor(0))
+  return {start_row, start_col, end_row, end_col + 1}
+end
+
+function M.set_cursor(row, col)
+  vim.api.nvim_win_set_cursor(0, {row + 1, col})
+end
+
+function M.get_cursor()
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  return row - 1, col
 end
 
 function M.include_surrounding_whitespace_(bufnr, textobject)
